@@ -7,6 +7,7 @@ import { Product } from './entities/product.entity';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 import { validate as isUUID } from 'uuid';
 import { ProductImage } from './entities';
+import { User } from 'src/auth/entities/user.entity';
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger('ProductsService');
@@ -18,10 +19,12 @@ export class ProductsService {
     private readonly datasource: DataSource //sabe la infomracion de la bd
 
   ) { }
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto, user:User) {
     try {
       const { images = [], ...productdetails } = createProductDto
-      const product = this.productRepository.create({ ...productdetails, images: images.map(image => this.productImageRepository.create({ url: image })) });
+      const product = this.productRepository.create({ ...productdetails, 
+        images: images.map(image => this.productImageRepository.create({ url: image })),
+        user });
       await this.productRepository.save(product);
       return { ...product, images };
     } catch (error) {
@@ -53,7 +56,7 @@ export class ProductsService {
     }
   }
 
-  async update(id: string, updateProductDto: UpdateProductDto) {
+  async update(id: string, updateProductDto: UpdateProductDto, user: User) {
     const { images = [], ...productdetails } = updateProductDto
     const producto = await this.productRepository.preload({ id, ...productdetails });
 
@@ -68,6 +71,7 @@ export class ProductsService {
         await queryRunner.manager.delete(ProductImage, { product: { id } }); // si no ponecos con id significa borrariamos todo
         producto.images = images.map(image => this.productImageRepository.create({ url: image }));
       }
+      producto.user = user;
       await queryRunner.manager.save(producto);
       // await this.productRepository.save(producto);
       await queryRunner.commitTransaction();

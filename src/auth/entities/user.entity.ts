@@ -1,4 +1,5 @@
-import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Product } from "src/products/entities";
+import { BeforeInsert, BeforeUpdate, Column, Entity, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 
 @Entity({ name: 'users' })
 export class User {
@@ -6,7 +7,7 @@ export class User {
     id: string;
     @Column('text', { unique: true })
     email: string;
-    @Column('text',{select:false})
+    @Column('text', { select: false })
     password: string;
     @Column('text')
     fullname: string;
@@ -14,6 +15,16 @@ export class User {
     isActive: boolean;
     @Column('text', { array: true, default: ['user'] })
     roles: string[];
+    @OneToMany(() => Product, (product) => product.user, { cascade: true })
+    product?: Product;
+
+
+
+    @BeforeInsert()
+    @BeforeUpdate()
+    checkfielemail() {
+        this.email = this.email.toLowerCase().trim();
+    }
     // @Column({ type: "date" })
     // createdAt: Date;
     // @Column({ type: "date" })

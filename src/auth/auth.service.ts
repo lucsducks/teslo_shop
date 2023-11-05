@@ -7,13 +7,16 @@ import * as bcrypt from 'bcrypt'
 import { User } from './entities/user.entity';
 import { CreateUserDto, LoginUserDto, UpdateUserDto } from './dto';
 import { isUUID } from 'class-validator';
+import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger('AuthService');
   constructor(
     @InjectRepository(User)
-    private userRepository: Repository<User>,
+    private readonly userRepository: Repository<User>,
+    private readonly jwtService: JwtService,
   ) { }
   async create(createUserDto: CreateUserDto) {
     try {
@@ -22,7 +25,7 @@ export class AuthService {
       console.log(user);
       await this.userRepository.save(user);
       delete user.password;
-      return user;
+      return { ...user, token: this.getJwtToken({ email: user.email, id: user.id }) };
     } catch (error) {
       this.handleDbException(error);
     }
@@ -30,10 +33,15 @@ export class AuthService {
   }
   async login(loginUserDto: LoginUserDto) {
     const { email, password } = loginUserDto;
-    const user = await this.userRepository.findOne({ where: { email }, select: { email: true, password: true } });
+    const user = await this.userRepository.findOne({ where: { email }, select: { email: true, password: true, id: true } });
     if (!user) throw new UnauthorizedException('Credentials not valid');
-    if(!bcrypt.compareSync(password,user.password)) throw new UnauthorizedException('Credentials not valid');
-    return user;
+    if (!bcrypt.compareSync(password, user.password)) throw new UnauthorizedException('Credentials not valid');
+    return { ...user, token: this.getJwtToken({ email: user.email, id: user.id }) };
+  }
+  async checkAuthStatus(user: User) {
+    console.log(user);
+    
+    return { ...user, token: this.getJwtToken({ email: user.email, id: user.id }) };
   }
 
   findAll() {
@@ -59,21 +67,26 @@ export class AuthService {
   remove(id: number) {
     return `This action removes a #${id} auth`;
   }
+
+  private getJwtToken(payload: JwtPayload) {
+    const token = this.jwtService.sign(payload);
+    return token;
+  }
   private handleDbException(error: any) {
     this.logger.error(`Database error occurred: ${error.code}: ${error.detail || error.message}`);
 
     switch (error.code) {
-      case '23505': // Unique violation
+      case '23505':
         throw new ConflictException(`A record with the provided details already exists.`);
-      case '23502': // Not null violation
+      case '23502':
         throw new BadRequestException('Missing required fields.');
-      case '23503': // Foreign key violation
+      case '23503':
         throw new NotFoundException('Related record not found.');
-      case '22P02': // Invalid text representation (e.g., UUID malformed)
+      case '22P02':
         throw new BadRequestException('Invalid data format.');
-      case '42P01': // Undefined table
+      case '42P01':
         throw new InternalServerErrorException('A server error occurred.');
-      // Add more cases as needed
+
       default:
         throw new InternalServerErrorException('Unexpected error occurred.');
     }
